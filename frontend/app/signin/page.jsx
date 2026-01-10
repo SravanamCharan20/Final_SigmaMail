@@ -26,16 +26,16 @@ export default function Signin() {
       const data = await res.json();
 
       if (!res.ok) {
-        toast.error(data.message || "Signin failed");
+        alert(data.message);
         return;
       }
 
       localStorage.setItem("token", data.token);
       toast.success("Signed in successfully");
 
-      router.push("/");
+      router.push("/dashboard");
     } catch (err) {
-      toast.error("Something went wrong");
+      toast.error("Something went wrong",err);
     } finally {
       setLoading(false);
     }

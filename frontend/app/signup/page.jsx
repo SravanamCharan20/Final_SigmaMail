@@ -36,6 +36,8 @@ const Signup = () => {
       setEmail("");
       setPassword("");
 
+      router.push("/signin")
+
     } catch (error) {
       console.error(error);
       toast.error("Something went wrong");
