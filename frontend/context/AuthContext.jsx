@@ -25,7 +25,7 @@ export const AuthProvider = ({ children }) => {
       }
 
       // ✅ CASE 2: token exists → verify
-      const res = await authFetch(`${API_URL}/auth/me`);
+      const res = await authFetch(`${API_URL}/userAuth/me`);
 
       if (!res || res.status === 401) {
         localStorage.removeItem("token");

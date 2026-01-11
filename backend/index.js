@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import mongoose from "mongoose";
-import authRoutes from "./routes/authRoutes.js";
+import userAuthRoutes from "./routes/authRoutes.js";
 
 dotenv.config();
 
@@ -31,7 +31,8 @@ app.get("/health", (req, res) => {
   res.json({ message: "Server is running" });
 });
 
-app.use("/auth", authRoutes);
+app.use("/userAuth", userAuthRoutes);
+
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
