@@ -15,13 +15,15 @@ const gmailAccountSchema = new mongoose.Schema(
     },
 
     accessToken: {
-      type: String,
-      required: true,
+      iv: String,
+      content: String,
+      tag: String,
     },
 
     refreshToken: {
-      type: String,
-      required: true,
+      iv: String,
+      content: String,
+      tag: String,
     },
 
     tokenExpiry: {

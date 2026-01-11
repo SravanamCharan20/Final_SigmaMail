@@ -1,7 +1,7 @@
 import express from "express";
 import { google } from "googleapis";
 import { oauth2Client } from "../utils/googleClient.js";
-import { requireAuth } from "../middlewares/verifyAuth.js";
+import { encrypt } from "../utils/crypto.js";
 import GmailAccount from "../models/gmailAccounts.js";
 
 const router = express.Router();
@@ -54,18 +54,15 @@ router.get("/google/callback", async (req, res) => {
 
     // 4. Store Gmail account (ONE DOCUMENT PER ACCOUNT)
     await GmailAccount.create({
-      user: state, // SigmaMail userId
+      user: state,
       emailAddress: gmailEmail,
-      accessToken: tokens.access_token,
-      refreshToken: tokens.refresh_token,
-      tokenExpiry: tokens.expiry_date
-        ? new Date(tokens.expiry_date)
-        : null,
+      accessToken: encrypt(tokens.access_token),
+      refreshToken: encrypt(tokens.refresh_token),
+      tokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
     });
 
     // 5. Redirect back to frontend
     res.redirect("http://localhost:3000/dashboard");
-
   } catch (err) {
     console.error("Gmail OAuth error:", err);
     res.status(500).send("Gmail auth failed");
