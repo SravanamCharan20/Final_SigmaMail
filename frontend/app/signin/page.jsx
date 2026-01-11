@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
+import { useAuth } from "../../context/AuthContext";
 
 const API_URL = process.env.NEXT_PUBLIC_BACKEND_SERVER_URL;
 
@@ -11,6 +12,7 @@ export default function Signin() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const { setUser } = useAuth();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -31,11 +33,11 @@ export default function Signin() {
       }
 
       localStorage.setItem("token", data.token);
+      setUser(data.user);
       toast.success("Signed in successfully");
-
       router.push("/dashboard");
     } catch (err) {
-      toast.error("Something went wrong",err);
+      toast.error("Something went wrong", err);
     } finally {
       setLoading(false);
     }
