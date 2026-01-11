@@ -35,6 +35,24 @@ export default function Dashboard() {
     window.location.href = `${backendUrl}/auth/google?userId=${user._id}`;
   };
 
+  const disconnectGmailAccount = async (accountId) => {
+    try {
+      const res = await authFetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_SERVER_URL}/gmail/connected-accounts/${accountId}`,
+        { method: "DELETE" }
+      );
+
+      if (!res.ok) return;
+
+      // Remove account from UI immediately
+      setGmailAccounts((prev) =>
+        prev.filter((account) => account._id !== accountId)
+      );
+    } catch (err) {
+      console.error("Failed to disconnect Gmail account", err);
+    }
+  };
+
   return (
     <div className="h-screen flex bg-white font-sans">
       {/* Sidebar */}
@@ -100,15 +118,23 @@ export default function Dashboard() {
               {gmailAccounts.map((account) => (
                 <div
                   key={account._id}
-                  className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-50 cursor-pointer"
+                  className="group flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-50"
                 >
                   <div className="h-6 w-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-medium">
                     {account.emailAddress.charAt(0).toUpperCase()}
                   </div>
 
-                  <span className="text-sm text-gray-700 truncate">
+                  <span className="flex-1 text-sm text-gray-700 truncate">
                     {account.emailAddress}
                   </span>
+
+                  <button
+                    onClick={() => disconnectGmailAccount(account._id)}
+                    title="Disconnect"
+                    className="opacity-0 group-hover:opacity-100 text-xs text-red-500 hover:underline transition"
+                  >
+                    Disconnect
+                  </button>
                 </div>
               ))}
             </div>

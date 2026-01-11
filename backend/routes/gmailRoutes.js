@@ -30,4 +30,29 @@ router.get("/connected-accounts", requireAuth, async (req, res) => {
   }
 });
 
+router.delete("/connected-accounts/:id", requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const account = await GmailAccount.findOneAndUpdate(
+      {
+        _id: id,
+        user: req.user._id, // security check
+      },
+      { isActive: false },
+      { new: true }
+    );
+
+    if (!account) {
+      return res.status(404).json({ message: "Account not found" });
+    }
+
+    res.json({ message: "Account disconnected" });
+  } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Failed to disconnect account" });
+    }
+  }
+);
+
 export default router;
