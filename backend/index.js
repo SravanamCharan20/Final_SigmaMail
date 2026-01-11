@@ -3,6 +3,8 @@ import cors from "cors";
 import dotenv from "dotenv";
 import mongoose from "mongoose";
 import userAuthRoutes from "./routes/authRoutes.js";
+import googleAuth from './routes/googleAuthRoutes.js'
+import gmailRoutes from './routes/gmailRoutes.js'
 
 dotenv.config();
 
@@ -32,6 +34,8 @@ app.get("/health", (req, res) => {
 });
 
 app.use("/userAuth", userAuthRoutes);
+app.use("/auth",googleAuth)
+app.use("/gmail",gmailRoutes)
 
 
 app.listen(PORT, () => {

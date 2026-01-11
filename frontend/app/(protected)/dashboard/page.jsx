@@ -1,10 +1,39 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useAuth } from "../../../context/AuthContext";
 import { LogOut } from "lucide-react";
+import { authFetch } from "../../../lib/authFetch";
 
 export default function Dashboard() {
   const { user, logout } = useAuth();
+  const [gmailAccounts, setGmailAccounts] = useState([]);
+  const [loadingAccounts, setLoadingAccounts] = useState(true);
+
+  useEffect(() => {
+    const loadAccounts = async () => {
+      try {
+        const res = await authFetch(
+          `${process.env.NEXT_PUBLIC_BACKEND_SERVER_URL}/gmail/connected-accounts`
+        );
+        if (!res.ok) return;
+
+        const data = await res.json();
+        setGmailAccounts(data.accounts || []);
+      } catch (err) {
+        console.error("Failed to load Gmail accounts", err);
+      } finally {
+        setLoadingAccounts(false);
+      }
+    };
+
+    loadAccounts();
+  }, []);
+
+  const connectGmailAccount = () => {
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_SERVER_URL;
+    window.location.href = `${backendUrl}/auth/google?userId=${user._id}`;
+  };
 
   return (
     <div className="h-screen flex bg-white font-sans">
@@ -57,12 +86,37 @@ export default function Dashboard() {
               Connected accounts
             </p>
 
-            <div className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-gray-50 cursor-pointer">
-              <span className="text-sm text-gray-700">Gmail</span>
-              <span className="text-xs text-gray-400">connected</span>
+            <div className="space-y-1">
+              {loadingAccounts && (
+                <p className="text-xs text-gray-400 px-2">Loading accounts…</p>
+              )}
+
+              {!loadingAccounts && gmailAccounts.length === 0 && (
+                <p className="text-xs text-gray-400 px-2">
+                  No accounts connected
+                </p>
+              )}
+
+              {gmailAccounts.map((account) => (
+                <div
+                  key={account._id}
+                  className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-50 cursor-pointer"
+                >
+                  <div className="h-6 w-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-medium">
+                    {account.emailAddress.charAt(0).toUpperCase()}
+                  </div>
+
+                  <span className="text-sm text-gray-700 truncate">
+                    {account.emailAddress}
+                  </span>
+                </div>
+              ))}
             </div>
 
-            <button className="w-full mt-2 px-3 py-2 text-sm rounded-lg border border-gray-300 hover:border-gray-400 hover:bg-gray-800 hover:text-white cursor-pointer transition">
+            <button
+              className="w-full mt-2 px-3 py-2 text-sm rounded-lg border border-gray-300 hover:border-gray-400 hover:bg-gray-800 hover:text-white cursor-pointer transition"
+              onClick={connectGmailAccount}
+            >
               + Add account
             </button>
           </div>
