@@ -1,16 +1,15 @@
 "use client";
 
 import { useAuth } from "../../../context/AuthContext";
+import { LogOut } from "lucide-react";
 
 export default function Dashboard() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
 
   return (
     <div className="h-screen flex bg-white font-sans">
-      
       {/* Sidebar */}
       <aside className="w-64 flex flex-col border-r border-gray-200">
-        
         {/* Top: Logo */}
         <div className="h-16 flex items-center px-6 border-b border-gray-100">
           <span className="text-lg font-semibold tracking-tight">
@@ -24,28 +23,32 @@ export default function Dashboard() {
             <div className="h-8 w-8 rounded-md bg-black text-white flex items-center justify-center text-sm">
               📥
             </div>
-            <span className="text-sm font-medium">
-              Inbox
-            </span>
+            <span className="text-sm font-medium">Inbox</span>
           </div>
         </div>
 
         {/* Bottom: Profile + Connected Accounts */}
         <div className="border-t border-gray-100 px-4 py-4">
-          
-          {/* User Profile */}
           <div className="flex items-center gap-3 mb-4">
+            {/* Avatar */}
             <div className="h-9 w-9 rounded-full bg-gray-200 flex items-center justify-center text-sm font-medium">
               {user.username?.charAt(0).toUpperCase()}
             </div>
-            <div className="min-w-0">
-              <p className="text-sm font-medium truncate">
-                {user.username}
-              </p>
-              <p className="text-xs text-gray-500 truncate">
-                {user.email}
-              </p>
+
+            {/* User info */}
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium truncate">{user.username}</p>
+              <p className="text-xs text-gray-500 truncate">{user.email}</p>
             </div>
+
+            {/* Logout icon */}
+            <button
+              onClick={logout}
+              title="Log out"
+              className="p-2 rounded-md cursor-pointer text-gray-400 hover:text-red-500 hover:bg-gray-100 transition"
+            >
+              <LogOut className="h-5 w-5 " />
+            </button>
           </div>
 
           {/* Connected Accounts */}
@@ -55,12 +58,8 @@ export default function Dashboard() {
             </p>
 
             <div className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-gray-50 cursor-pointer">
-              <span className="text-sm text-gray-700">
-                Gmail
-              </span>
-              <span className="text-xs text-gray-400">
-                connected
-              </span>
+              <span className="text-sm text-gray-700">Gmail</span>
+              <span className="text-xs text-gray-400">connected</span>
             </div>
 
             <button className="w-full mt-2 px-3 py-2 text-sm rounded-lg border border-gray-300 hover:border-gray-400 hover:bg-gray-800 hover:text-white cursor-pointer transition">

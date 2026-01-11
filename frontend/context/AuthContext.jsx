@@ -43,8 +43,16 @@ export const AuthProvider = ({ children }) => {
     loadUser();
   }, [router]);
 
+  const logout = () => {
+    localStorage.removeItem("token");
+    setTimeout(() => {
+      setUser(null);
+    }, 3000);
+    router.replace("/signin");
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, setUser }}>
+    <AuthContext.Provider value={{ user, loading, setUser, logout }}>
       {children}
     </AuthContext.Provider>
   );
