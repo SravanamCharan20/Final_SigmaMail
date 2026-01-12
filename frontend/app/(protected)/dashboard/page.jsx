@@ -10,6 +10,8 @@ export default function Dashboard() {
   const [gmailAccounts, setGmailAccounts] = useState([]);
   const [loadingAccounts, setLoadingAccounts] = useState(true);
   const [currAccount, setCurrAccount] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [loadingMessages, setLoadingMessages] = useState(false);
 
   useEffect(() => {
     const loadAccounts = async () => {
@@ -55,14 +57,21 @@ export default function Dashboard() {
   };
 
   const handleGetMessages = async (accountId) => {
-    const res = await authFetch(
-      `${process.env.NEXT_PUBLIC_BACKEND_SERVER_URL}/gmail/messages?accountId=${accountId}`
-    );
+    try {
+      setLoadingMessages(true);
+      const res = await authFetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_SERVER_URL}/gmail/messages?accountId=${accountId}`
+      );
 
-    if (!res.ok) return;
+      if (!res.ok) return;
 
-    const data = await res.json();
-    console.log(data.messages);
+      const data = await res.json();
+      setMessages(data.messages || []);
+    } catch (err) {
+      console.error("Failed to load messages", err);
+    } finally {
+      setLoadingMessages(false);
+    }
   };
 
   return (
@@ -131,7 +140,9 @@ export default function Dashboard() {
                 <div
                   key={account._id}
                   className={`group flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer ${
-                    currAccount === account._id ? "bg-gray-100" : "hover:bg-gray-50"
+                    currAccount === account._id
+                      ? "bg-gray-100"
+                      : "hover:bg-gray-50"
                   }`}
                 >
                   <div className="h-6 w-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-medium">
@@ -171,9 +182,65 @@ export default function Dashboard() {
         </div>
       </aside>
 
-      {/* Main content placeholder */}
-      <main className="flex-1 bg-gray-50">
-        {/* Email list & thread view will go here */}
+      {/* Main content */}
+      <main className="w-[480px] flex flex-col bg-gray-50 border-r border-gray-200">
+        {/* Inbox Header */}
+        <div className="h-16 flex items-center justify-between px-6 border-b border-gray-200 bg-white">
+          <h2 className="text-lg font-semibold tracking-tight">Inbox</h2>
+        </div>
+
+        {/* Email List */}
+        <div className="flex-1 overflow-y-auto divide-y divide-gray-200 bg-white">
+          {loadingMessages && (
+            <p className="p-6 text-sm text-gray-500">Loading messages…</p>
+          )}
+
+          {!loadingMessages && messages.length === 0 && (
+            <p className="p-6 text-sm text-gray-500">
+              Select an account to view messages
+            </p>
+          )}
+
+          {messages.map((msg) => (
+            <div
+              key={msg.messageId || msg.id}
+              className="group px-6 py-4 hover:bg-gray-50 cursor-pointer transition"
+            >
+              <div className="flex items-start gap-4">
+                {/* Avatar */}
+                <div className="h-9 w-9 rounded-full bg-gray-200 flex items-center justify-center text-xs font-medium">
+                  {msg.from?.charAt(0)?.toUpperCase() || "?"}
+                </div>
+
+                {/* Content */}
+                <div className="flex-1 min-w-0 space-y-1">
+                  {/* From + Date */}
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-semibold text-gray-900 truncate">
+                      {msg.from?.split("<")[0]?.trim() || "Unknown sender"}
+                    </p>
+                    <span className="text-xs text-gray-400">
+                      {new Date(msg.internalDate).toLocaleDateString()}
+                    </span>
+                  </div>
+
+                  {/* Subject */}
+                  <p className="text-sm font-medium text-gray-800 truncate">
+                    {msg.subject || "(No subject)"}
+                  </p>
+
+                  {/* Snippet + Pill */}
+                  {/* Snippet + Email pill */}
+                  <div className="flex items-center gap-3">
+                    <p className="text-sm text-gray-400 truncate flex-1">
+                      {msg.snippet}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       </main>
     </div>
   );
