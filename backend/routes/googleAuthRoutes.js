@@ -53,13 +53,25 @@ router.get("/google/callback", async (req, res) => {
     const gmailEmail = profile.data.emailAddress;
 
     // 4. Store Gmail account (ONE DOCUMENT PER ACCOUNT)
-    await GmailAccount.create({
-      user: state,
-      emailAddress: gmailEmail,
-      accessToken: encrypt(tokens.access_token),
-      refreshToken: encrypt(tokens.refresh_token),
-      tokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
-    });
+    
+    await GmailAccount.findOneAndUpdate(
+      {
+        user: state,
+        emailAddress: gmailEmail,
+      },
+      {
+        user: state,
+        emailAddress: gmailEmail,
+        accessToken: encrypt(tokens.access_token),
+        refreshToken: encrypt(tokens.refresh_token),
+        tokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+        isActive: true, // re-activate if previously disconnected
+      },
+      {
+        upsert: true,   // create if not exists
+        new: true,
+      }
+    );
 
     // 5. Redirect back to frontend
     res.redirect("http://localhost:3000/dashboard");
