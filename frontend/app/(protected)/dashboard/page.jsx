@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useAuth } from "../../../context/AuthContext";
 import { LogOut } from "lucide-react";
 import { authFetch } from "../../../lib/authFetch";
@@ -23,8 +23,8 @@ export default function Dashboard() {
   const pollingRef = useRef(null);
   const lastTimestampRef = useRef(null);
 
-  const isInitialLoading = loadingMessages && messages.length === 0;
-  const isPaginating = loadingMore && messages.length > 0;
+  // Only show loader on true initial load (no messages yet)
+  const showInitialLoader = loadingMessages && messages.length === 0;
 
   useEffect(() => {
     const loadAccounts = async () => {
@@ -51,9 +51,6 @@ export default function Dashboard() {
 
     loadAccounts();
   }, []);
-
-
-
 
   const connectGmailAccount = () => {
     const backendUrl = process.env.NEXT_PUBLIC_BACKEND_SERVER_URL;
@@ -128,7 +125,7 @@ export default function Dashboard() {
     }
   };
 
-  const loadMoreMessages = async () => {
+  const loadMoreMessages = useCallback(async () => {
     if (!activeAccountId) return;
 
     // 🚫 If cursor is null, DB pagination is DONE
@@ -138,7 +135,7 @@ export default function Dashboard() {
     }
 
     try {
-      // setLoadingMore(true);
+      setLoadingMore(true);
 
       const res = await authFetch(
         `${process.env.NEXT_PUBLIC_BACKEND_SERVER_URL}/gmail/messages?accountId=${activeAccountId}&cursor=${cursor}`
@@ -187,28 +184,33 @@ export default function Dashboard() {
     } catch (err) {
       console.error("Failed to load more messages", err);
     } finally {
-      // setLoadingMore(false);
+      setLoadingMore(false);
     }
-  };
+  }, [activeAccountId, cursor]);
 
+  // IntersectionObserver with aggressive prefetch (300px before sentinel)
   useEffect(() => {
     if (!sentinelRef.current) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && cursor !== null) {
-          console.log("👀 Prefetch triggered");
+        if (entries[0].isIntersecting && cursor !== null && !loadingMore) {
+          console.log("👀 Prefetch triggered (early, 300px before)");
           loadMoreMessages();
         }
       },
-      { threshold: 0.7 }
+      { 
+        threshold: 0,
+        rootMargin: "300px" // Prefetch 300px before user reaches sentinel
+      }
     );
 
     observer.observe(sentinelRef.current);
 
     return () => observer.disconnect();
-  }, [cursor, activeAccountId]);
+  }, [cursor, loadingMore, loadMoreMessages]);
 
+  // Delta sync polling (silent background updates)
   useEffect(() => {
     if (!activeAccountId || !lastTimestampRef.current) return;
 
@@ -347,14 +349,14 @@ export default function Dashboard() {
         </div>
 
         {/* Email List */}
-        <div
-          className="flex-1 overflow-y-auto divide-y divide-gray-200 bg-white"
-        >
-          {isInitialLoading && (
+        <div className="flex-1 overflow-y-auto divide-y divide-gray-200 bg-white">
+          {/* Only show loader on true initial load */}
+          {showInitialLoader && (
             <p className="p-6 text-sm text-gray-500">Loading messages…</p>
           )}
 
-          {!loadingMessages && !loadingMore && messages.length === 0 && (
+          {/* Empty state */}
+          {!loadingMessages && messages.length === 0 && (
             <p className="p-6 text-sm text-gray-500">
               {gmailAccounts.length === 0
                 ? "Connect a Gmail account"
@@ -362,6 +364,7 @@ export default function Dashboard() {
             </p>
           )}
 
+          {/* Message list - always visible, never blocked */}
           {messages.map((msg) => (
             <div
               key={`${msg.gmailAccount}-${msg.messageId}`}
@@ -390,8 +393,7 @@ export default function Dashboard() {
                     {msg.subject || "(No subject)"}
                   </p>
 
-                  {/* Snippet + Pill */}
-                  {/* Snippet + Email pill */}
+                  {/* Snippet */}
                   <div className="flex items-center gap-3">
                     <p className="text-sm text-gray-400 truncate flex-1">
                       {msg.snippet}
@@ -401,12 +403,11 @@ export default function Dashboard() {
               </div>
             </div>
           ))}
-          <div ref={sentinelRef} className="h-10" />
-          {isPaginating && (
-            <p className="p-4 text-center text-xs text-gray-400">
-              Loading more…
-            </p>
-          )}
+          
+          {/* Invisible sentinel for prefetching - positioned well before end */}
+          <div ref={sentinelRef} className="h-1" />
+          
+          {/* NO pagination loader shown - everything happens silently */}
         </div>
       </main>
     </div>
