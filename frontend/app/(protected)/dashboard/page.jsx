@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useAuth } from "../../../context/AuthContext";
 import { LogOut } from "lucide-react";
 import { authFetch } from "../../../lib/authFetch";
@@ -11,6 +11,20 @@ export default function Dashboard() {
   const [loadingAccounts, setLoadingAccounts] = useState(true);
   const [messages, setMessages] = useState([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [cursor, setCursor] = useState(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [activeAccountId, setActiveAccountId] = useState(null);
+
+  const lastPaginatedDateRef = useRef(null);
+  const incrementalTriggeredRef = useRef(false);
+
+  const sentinelRef = useRef(null);
+  const pollingRef = useRef(null);
+  const lastTimestampRef = useRef(null);
+
+  const isInitialLoading = loadingMessages && messages.length === 0;
+  const isPaginating = loadingMore && messages.length > 0;
 
   useEffect(() => {
     const loadAccounts = async () => {
@@ -25,7 +39,7 @@ export default function Dashboard() {
         setGmailAccounts(accounts);
 
         // auto-load messages if only one account
-        if (accounts.length === 1) {
+        if (accounts.length === 1 && messages.length === 0) {
           handleGetMessages(accounts[0]._id);
         }
       } catch (err) {
@@ -37,6 +51,9 @@ export default function Dashboard() {
 
     loadAccounts();
   }, []);
+
+
+
 
   const connectGmailAccount = () => {
     const backendUrl = process.env.NEXT_PUBLIC_BACKEND_SERVER_URL;
@@ -61,9 +78,21 @@ export default function Dashboard() {
     }
   };
 
+  // Helper: Merge and deduplicate messages by account+messageId
+  const mergeUniqueMessages = (prev, next) => {
+    const map = new Map();
+    [...prev, ...next].forEach((m) => {
+      map.set(`${m.gmailAccount}-${m.messageId}`, m);
+    });
+    return Array.from(map.values()).sort(
+      (a, b) => new Date(b.internalDate) - new Date(a.internalDate)
+    );
+  };
+
   const handleGetMessages = async (accountId) => {
     try {
       setLoadingMessages(true);
+      setActiveAccountId(accountId);
 
       const res = await authFetch(
         `${process.env.NEXT_PUBLIC_BACKEND_SERVER_URL}/gmail/messages${
@@ -75,18 +104,137 @@ export default function Dashboard() {
 
       const data = await res.json();
 
-      // Backend may return array OR { messages: [] }
-      if (Array.isArray(data)) {
-        setMessages(data);
-      } else {
-        setMessages(data.messages || []);
-      }
+      const msgs = Array.isArray(data?.messages)
+        ? data.messages
+        : Array.isArray(data)
+        ? data
+        : [];
+
+      setMessages(() => mergeUniqueMessages([], msgs));
+      incrementalTriggeredRef.current = false;
+      console.log("📨 Messages loaded:", msgs.length);
+      setCursor(data?.nextCursor || null);
+      lastPaginatedDateRef.current =
+        msgs.length > 0 ? msgs[msgs.length - 1].internalDate : null;
+
+      lastTimestampRef.current =
+        msgs.length > 0 ? msgs[0].internalDate : null;
+
+      setHasMore(true);
     } catch (err) {
       console.error("Failed to load messages", err);
     } finally {
       setLoadingMessages(false);
     }
   };
+
+  const loadMoreMessages = async () => {
+    if (!activeAccountId) return;
+
+    // 🚫 If cursor is null, DB pagination is DONE
+    if (cursor === null) {
+      console.log("⛔ Pagination exhausted, waiting for socket updates");
+      return;
+    }
+
+    try {
+      // setLoadingMore(true);
+
+      const res = await authFetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_SERVER_URL}/gmail/messages?accountId=${activeAccountId}&cursor=${cursor}`
+      );
+
+      if (!res.ok) return;
+
+      const data = await res.json();
+      const msgs = data.messages || [];
+      console.log("📦 DB pagination returned", msgs.length);
+      console.log("📦 Pagination cursor:", cursor);
+
+      if (msgs.length === 0) {
+        console.log("🔴 DB empty → entering LIVE MODE");
+        setHasMore(false);
+
+        // 🚀 Trigger incremental sync ONCE
+        if (!incrementalTriggeredRef.current) {
+          incrementalTriggeredRef.current = true;
+          console.log("🚀 Triggering incremental sync");
+          authFetch(
+            `${process.env.NEXT_PUBLIC_BACKEND_SERVER_URL}/gmail/incremental-sync?accountId=${activeAccountId}`,
+            { method: "POST" }
+          ).catch(() => {});
+        }
+
+        return;
+      }
+
+      setHasMore(true);
+
+      setMessages((prev) => mergeUniqueMessages(prev, msgs));
+
+      // 🔓 allow future incremental sync once history grows again
+      incrementalTriggeredRef.current = false;
+
+      if (msgs.length > 0 && !lastTimestampRef.current) {
+        lastTimestampRef.current = msgs[0].internalDate;
+      }
+
+      setCursor(data.nextCursor || null);
+
+      if (msgs.length > 0) {
+        lastPaginatedDateRef.current = msgs[msgs.length - 1].internalDate;
+      }
+    } catch (err) {
+      console.error("Failed to load more messages", err);
+    } finally {
+      // setLoadingMore(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!sentinelRef.current) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && cursor !== null) {
+          console.log("👀 Prefetch triggered");
+          loadMoreMessages();
+        }
+      },
+      { threshold: 0.7 }
+    );
+
+    observer.observe(sentinelRef.current);
+
+    return () => observer.disconnect();
+  }, [cursor, activeAccountId]);
+
+  useEffect(() => {
+    if (!activeAccountId || !lastTimestampRef.current) return;
+
+    pollingRef.current = setInterval(async () => {
+      try {
+        const res = await authFetch(
+          `${process.env.NEXT_PUBLIC_BACKEND_SERVER_URL}/gmail/messages/latest?accountId=${activeAccountId}&after=${lastTimestampRef.current}`
+        );
+
+        if (!res.ok) return;
+        const data = await res.json();
+        const newMsgs = data.messages || [];
+
+        if (newMsgs.length > 0) {
+          console.log("⚡ Delta sync:", newMsgs.length);
+          setMessages((prev) => mergeUniqueMessages(newMsgs, prev));
+          lastTimestampRef.current = newMsgs[0].internalDate;
+        } else {
+          // 🔓 allow incremental sync to be retriggered later
+          incrementalTriggeredRef.current = false;
+        }
+      } catch {}
+    }, 4000);
+
+    return () => clearInterval(pollingRef.current);
+  }, [activeAccountId]);
 
   return (
     <div className="h-screen flex bg-white font-sans">
@@ -199,22 +347,24 @@ export default function Dashboard() {
         </div>
 
         {/* Email List */}
-        <div className="flex-1 overflow-y-auto divide-y divide-gray-200 bg-white">
-          {loadingMessages && (
+        <div
+          className="flex-1 overflow-y-auto divide-y divide-gray-200 bg-white"
+        >
+          {isInitialLoading && (
             <p className="p-6 text-sm text-gray-500">Loading messages…</p>
           )}
 
-          {!loadingMessages && messages.length === 0 && (
+          {!loadingMessages && !loadingMore && messages.length === 0 && (
             <p className="p-6 text-sm text-gray-500">
               {gmailAccounts.length === 0
                 ? "Connect a Gmail account"
-                : "Syncing messages…"}
+                : "No messages found"}
             </p>
           )}
 
           {messages.map((msg) => (
             <div
-              key={msg.messageId || msg.id}
+              key={`${msg.gmailAccount}-${msg.messageId}`}
               className="group px-6 py-4 hover:bg-gray-50 cursor-pointer transition"
             >
               <div className="flex items-start gap-4">
@@ -251,6 +401,12 @@ export default function Dashboard() {
               </div>
             </div>
           ))}
+          <div ref={sentinelRef} className="h-10" />
+          {isPaginating && (
+            <p className="p-4 text-center text-xs text-gray-400">
+              Loading more…
+            </p>
+          )}
         </div>
       </main>
     </div>

@@ -82,9 +82,11 @@ router.get("/google/callback", async (req, res) => {
     );
 
     if (!savedAccount.isInitialSynced) {
+      console.log("🚀 Enqueuing INITIAL sync", savedAccount._id);
       await gmailSyncQueue.add(
         "initial-sync",
         {
+          type: "initial", // ✅ REQUIRED
           userId: state,
           gmailAccountId: savedAccount._id,
         },

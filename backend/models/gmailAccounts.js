@@ -43,6 +43,18 @@ const gmailAccountSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+
+    // Gmail pagination cursor (for incremental sync)
+    syncPageToken: {
+      type: String,
+      default: null,
+    },
+
+    // Marks when all Gmail messages are fully synced
+    syncComplete: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true }
 );

@@ -5,8 +5,9 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js"
+    "start": "PROCESS_ROLE=server node index.js",
+    "dev": "PROCESS_ROLE=server nodemon index.js",
+    "worker": "PROCESS_ROLE=worker nodemon workers/gmailSync.worker.js"
   },
   "keywords": [],
   "author": "",
@@ -22,6 +23,7 @@
     "ioredis": "^5.9.1",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.1.2",
-    "nodemon": "^3.1.11"
+    "nodemon": "^3.1.11",
+    "socket.io": "^4.8.3"
   }
 }

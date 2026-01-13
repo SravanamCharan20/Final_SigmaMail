@@ -15,9 +15,16 @@ const getHeader = (payload, name) =>
 new Worker(
   "gmail-sync",
   async (job) => {
+    console.log("📥 Sync job received:", job.data);
+    const { type = "initial" } = job.data;
+    
     const { userId, gmailAccountId } = job.data;
-    const MAX_INITIAL_EMAILS = 20;
+    const BATCH_SIZE = 20;
     let syncedCount = 0;
+
+    if (type === "initial") {
+      syncedCount = 0;
+    }
 
     console.log("📥 Sync job received:", job.data);
 
@@ -29,12 +36,17 @@ new Worker(
       return;
     }
 
-    if (account.isInitialSynced) {
+    console.log(
+      `🔁 Sync mode: ${type}, starting from`,
+      type === "initial" ? "BEGINNING" : "PAGE TOKEN"
+    );
+
+    if (type === "initial" && account.isInitialSynced) {
       console.log("⏭️ Initial sync already done. Skipping.");
       return;
     }
 
-    console.log("✅ Starting initial sync");
+    console.log(`✅ Starting ${type} sync`);
 
     // 2️⃣ Gmail client
     const oauth2Client = new google.auth.OAuth2();
@@ -45,7 +57,8 @@ new Worker(
 
     const gmail = google.gmail({ version: "v1", auth: oauth2Client });
 
-    let pageToken;
+    let pageToken =
+      type === "initial" ? undefined : account.syncPageToken || undefined;
 
     do {
       const listRes = await gmail.users.messages.list({
@@ -54,10 +67,10 @@ new Worker(
         pageToken,
       });
 
-      pageToken = listRes.data.nextPageToken;
+      pageToken = listRes.data.nextPageToken || null;
 
       for (const msg of listRes.data.messages || []) {
-        if (syncedCount >= MAX_INITIAL_EMAILS) break;
+        if (syncedCount >= BATCH_SIZE) break;
 
         const exists = await Email.findOne({
           gmailAccount: gmailAccountId,
@@ -73,7 +86,7 @@ new Worker(
 
         const payload = full.data.payload;
 
-        await Email.create({
+        const savedEmail = await Email.create({
           user: userId,
           gmailAccount: gmailAccountId,
           messageId: msg.id,
@@ -87,17 +100,35 @@ new Worker(
           isStarred: full.data.labelIds?.includes("STARRED"),
         });
 
+
         syncedCount++;
       }
-    } while (pageToken && syncedCount < MAX_INITIAL_EMAILS);
+    } while (pageToken && syncedCount < BATCH_SIZE);
 
-    // 3️⃣ MARK SYNC COMPLETE (THIS WAS MISSING)
-    await GmailAccount.updateOne(
-      { _id: gmailAccountId },
-      { $set: { isInitialSynced: true } }
-    );
+    if (type === "initial") {
+      await GmailAccount.updateOne(
+        { _id: gmailAccountId },
+        {
+          $set: {
+            isInitialSynced: true,
+            syncPageToken: pageToken,
+            syncComplete: !pageToken,
+          },
+        }
+      );
+    } else {
+      await GmailAccount.updateOne(
+        { _id: gmailAccountId },
+        {
+          $set: {
+            syncPageToken: pageToken,
+            syncComplete: !pageToken,
+          },
+        }
+      );
+    }
 
-    console.log("✅ Initial Gmail sync completed & flag updated");
+    console.log("✅ Gmail sync completed & flag updated");
   },
   { connection: redis }
 );
