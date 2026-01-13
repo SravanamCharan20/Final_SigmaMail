@@ -38,6 +38,11 @@ const gmailAccountSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+
+    isInitialSynced: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true }
 );

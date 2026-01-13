@@ -5,6 +5,7 @@ import mongoose from "mongoose";
 import userAuthRoutes from "./routes/authRoutes.js";
 import googleAuth from './routes/googleAuthRoutes.js'
 import gmailRoutes from './routes/gmailRoutes.js'
+import "./config/db.js";
 
 dotenv.config();
 
@@ -16,17 +17,6 @@ const MONGODB_URL = process.env.MONGODB_URL;
 // Middlewares
 app.use(cors());
 app.use(express.json());
-
-// DB Connection
-mongoose
-  .connect(MONGODB_URL)
-  .then(() => {
-    console.log("Connected to MongoDB");
-  })
-  .catch((err) => {
-    console.log(err);
-  });
-
   
 // Routes
 app.get("/health", (req, res) => {

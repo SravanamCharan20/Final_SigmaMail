@@ -9,7 +9,6 @@ export default function Dashboard() {
   const { user, logout } = useAuth();
   const [gmailAccounts, setGmailAccounts] = useState([]);
   const [loadingAccounts, setLoadingAccounts] = useState(true);
-  const [currAccount, setCurrAccount] = useState(null);
   const [messages, setMessages] = useState([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
 
@@ -22,7 +21,13 @@ export default function Dashboard() {
         if (!res.ok) return;
 
         const data = await res.json();
-        setGmailAccounts(data.accounts || []);
+        const accounts = data.accounts || [];
+        setGmailAccounts(accounts);
+
+        // auto-load messages if only one account
+        if (accounts.length === 1) {
+          handleGetMessages(accounts[0]._id);
+        }
       } catch (err) {
         console.error("Failed to load Gmail accounts", err);
       } finally {
@@ -59,14 +64,23 @@ export default function Dashboard() {
   const handleGetMessages = async (accountId) => {
     try {
       setLoadingMessages(true);
+
       const res = await authFetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_SERVER_URL}/gmail/messages?accountId=${accountId}`
+        `${process.env.NEXT_PUBLIC_BACKEND_SERVER_URL}/gmail/messages${
+          accountId ? `?accountId=${accountId}` : ""
+        }`
       );
 
       if (!res.ok) return;
 
       const data = await res.json();
-      setMessages(data.messages || []);
+
+      // Backend may return array OR { messages: [] }
+      if (Array.isArray(data)) {
+        setMessages(data);
+      } else {
+        setMessages(data.messages || []);
+      }
     } catch (err) {
       console.error("Failed to load messages", err);
     } finally {
@@ -91,7 +105,9 @@ export default function Dashboard() {
             <div className="h-8 w-8 rounded-md bg-black text-white flex items-center justify-center text-sm">
               📥
             </div>
-            <span className="text-sm font-medium">Inbox</span>
+            <span className="text-sm font-medium">
+              <span>Inbox</span>
+            </span>
           </div>
         </div>
 
@@ -139,11 +155,7 @@ export default function Dashboard() {
               {gmailAccounts.map((account) => (
                 <div
                   key={account._id}
-                  className={`group flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer ${
-                    currAccount === account._id
-                      ? "bg-gray-100"
-                      : "hover:bg-gray-50"
-                  }`}
+                  className="group flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer hover:bg-gray-50"
                 >
                   <div className="h-6 w-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-medium">
                     {account.emailAddress.charAt(0).toUpperCase()}
@@ -152,10 +164,7 @@ export default function Dashboard() {
                   <span className="flex-1 text-sm text-gray-700 truncate">
                     <button
                       className="cursor-pointer text-left"
-                      onClick={() => {
-                        setCurrAccount(account._id);
-                        handleGetMessages(account._id);
-                      }}
+                      onClick={() => handleGetMessages(account._id)}
                     >
                       {account.emailAddress}
                     </button>
@@ -197,7 +206,9 @@ export default function Dashboard() {
 
           {!loadingMessages && messages.length === 0 && (
             <p className="p-6 text-sm text-gray-500">
-              Select an account to view messages
+              {gmailAccounts.length === 0
+                ? "Connect a Gmail account"
+                : "Syncing messages…"}
             </p>
           )}
 

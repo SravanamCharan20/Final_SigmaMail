@@ -3,6 +3,8 @@ import { google } from "googleapis";
 import { oauth2Client } from "../utils/googleClient.js";
 import { encrypt } from "../utils/crypto.js";
 import GmailAccount from "../models/gmailAccounts.js";
+import { gmailSyncQueue } from "../queues/gmailSyncQueue.js";
+import mongoose from "mongoose";
 
 const router = express.Router();
 
@@ -33,6 +35,7 @@ router.get("/google", (req, res) => {
  */
 router.get("/google/callback", async (req, res) => {
   const { code, state } = req.query;
+  const userObjectId = new mongoose.Types.ObjectId(state);
 
   try {
     // 1. Exchange code → tokens
@@ -54,24 +57,44 @@ router.get("/google/callback", async (req, res) => {
 
     // 4. Store Gmail account (ONE DOCUMENT PER ACCOUNT)
     
-    await GmailAccount.findOneAndUpdate(
+    const savedAccount = await GmailAccount.findOneAndUpdate(
       {
-        user: state,
+        user: userObjectId,
         emailAddress: gmailEmail,
       },
       {
-        user: state,
-        emailAddress: gmailEmail,
-        accessToken: encrypt(tokens.access_token),
-        refreshToken: encrypt(tokens.refresh_token),
-        tokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
-        isActive: true, // re-activate if previously disconnected
+        $set: {
+          accessToken: encrypt(tokens.access_token),
+          refreshToken: encrypt(tokens.refresh_token),
+          tokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+          isActive: true, // re-activate if previously disconnected
+        },
+        $setOnInsert: {
+          user: userObjectId,
+          emailAddress: gmailEmail,
+          isInitialSynced: false,
+        },
       },
       {
-        upsert: true,   // create if not exists
+        upsert: true,
         new: true,
       }
     );
+
+    if (!savedAccount.isInitialSynced) {
+      await gmailSyncQueue.add(
+        "initial-sync",
+        {
+          userId: state,
+          gmailAccountId: savedAccount._id,
+        },
+        {
+          jobId: `initial-sync-${savedAccount._id}`,
+          removeOnComplete: true,
+          removeOnFail: true,
+        }
+      );
+    }
 
     // 5. Redirect back to frontend
     res.redirect("http://localhost:3000/dashboard");
